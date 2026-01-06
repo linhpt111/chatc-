@@ -1,0 +1,33 @@
+# Build outputs
+bin/
+build/
+downloads/
+
+# Object files
+*.exe
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+
+# Logs and databases
+*.log
+*.db
+
+# IDE
+.vscode/
+.vs/
+*.suo
+*.user
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Temp files
+*.tmp
+*.bak
