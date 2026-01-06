@@ -4,12 +4,12 @@
 #include <map>
 #include <string>
 #include <mutex>
-#include <winsock2.h>
+#include "../utils/network_utils.h"
 
 class ClientManager {
 private:
-    std::map<std::string, SOCKET> clients;      // username -> socket
-    std::map<SOCKET, std::string> socketToUser; // socket -> username
+    std::map<std::string, SocketType> clients;      // username -> socket
+    std::map<SocketType, std::string> socketToUser; // socket -> username
     std::mutex mtx;
 
 public:
@@ -17,7 +17,7 @@ public:
     ~ClientManager() = default;
 
     // Add a new client
-    bool addClient(const std::string& username, SOCKET socket) {
+    bool addClient(const std::string& username, SocketType socket) {
         std::lock_guard<std::mutex> lock(mtx);
         
         if (clients.find(username) != clients.end()) {
@@ -30,7 +30,7 @@ public:
     }
 
     // Remove a client by socket
-    std::string removeClient(SOCKET socket) {
+    std::string removeClient(SocketType socket) {
         std::lock_guard<std::mutex> lock(mtx);
         
         auto it = socketToUser.find(socket);
@@ -46,7 +46,7 @@ public:
     }
 
     // Get username by socket
-    std::string getUsername(SOCKET socket) {
+    std::string getUsername(SocketType socket) {
         std::lock_guard<std::mutex> lock(mtx);
         
         auto it = socketToUser.find(socket);
@@ -57,14 +57,14 @@ public:
     }
 
     // Get socket by username
-    SOCKET getSocket(const std::string& username) {
+    SocketType getSocket(const std::string& username) {
         std::lock_guard<std::mutex> lock(mtx);
         
         auto it = clients.find(username);
         if (it != clients.end()) {
             return it->second;
         }
-        return INVALID_SOCKET;
+        return SOCKET_INVALID;
     }
 
     // Check if client exists
@@ -74,7 +74,7 @@ public:
     }
 
     // Get all connected clients
-    std::map<std::string, SOCKET> getAllClients() {
+    std::map<std::string, SocketType> getAllClients() {
         std::lock_guard<std::mutex> lock(mtx);
         return clients;
     }

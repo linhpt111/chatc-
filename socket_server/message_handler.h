@@ -23,7 +23,7 @@ public:
         : clientManager(cm), topicManager(tm), fileTransferManager(ftm), dbManager(db) {}
 
     // Handle login message
-    void handleLogin(SOCKET clientSocket, PacketHeader* header) {
+    void handleLogin(SocketType clientSocket, PacketHeader* header) {
         std::string username(header->sender);
         
         if (clientManager.addClient(username, clientSocket)) {
@@ -51,7 +51,7 @@ public:
     }
 
     // Handle subscribe message
-    void handleSubscribe(SOCKET clientSocket, PacketHeader* header) {
+    void handleSubscribe(SocketType clientSocket, PacketHeader* header) {
         std::string topic(header->topic);
         std::string username = clientManager.getUsername(clientSocket);
         
@@ -74,7 +74,7 @@ public:
     }
 
     // Handle unsubscribe message
-    void handleUnsubscribe(SOCKET clientSocket, PacketHeader* header) {
+    void handleUnsubscribe(SocketType clientSocket, PacketHeader* header) {
         std::string topic(header->topic);
         std::string username = clientManager.getUsername(clientSocket);
         
@@ -90,7 +90,7 @@ public:
     }
 
     // Handle text message publish
-    void handlePublishText(SOCKET clientSocket, PacketHeader* header, std::vector<char>& payload) {
+    void handlePublishText(SocketType clientSocket, PacketHeader* header, std::vector<char>& payload) {
         std::string topic(header->topic);
         std::string sender(header->sender);
         std::string message(payload.begin(), payload.end());
@@ -110,8 +110,8 @@ public:
         if (StringUtils::isDMTopic(topic)) {
             // Direct message - send to recipient only
             std::string recipient = StringUtils::extractRecipient(topic, sender);
-            SOCKET recipientSocket = clientManager.getSocket(recipient);
-            if (recipientSocket != INVALID_SOCKET) {
+            SocketType recipientSocket = clientManager.getSocket(recipient);
+            if (recipientSocket != SOCKET_INVALID) {
                 NetworkUtils::forwardMessage(recipientSocket, header, payload);
             }
         } else {
@@ -119,8 +119,8 @@ public:
             auto subscribers = topicManager.getSubscribers(topic);
             for (const std::string& subscriber : subscribers) {
                 if (subscriber != sender) {
-                    SOCKET subscriberSocket = clientManager.getSocket(subscriber);
-                    if (subscriberSocket != INVALID_SOCKET) {
+                    SocketType subscriberSocket = clientManager.getSocket(subscriber);
+                    if (subscriberSocket != SOCKET_INVALID) {
                         NetworkUtils::forwardMessage(subscriberSocket, header, payload);
                     }
                 }
@@ -131,7 +131,7 @@ public:
     }
 
     // Handle file metadata
-    void handlePublishFile(SOCKET clientSocket, PacketHeader* header, std::vector<char>& payload) {
+    void handlePublishFile(SocketType clientSocket, PacketHeader* header, std::vector<char>& payload) {
         std::string topic(header->topic);
         std::string sender(header->sender);
         
@@ -149,16 +149,16 @@ public:
         // Forward file metadata to recipients
         if (StringUtils::isDMTopic(topic)) {
             std::string recipient = StringUtils::extractRecipient(topic, sender);
-            SOCKET recipientSocket = clientManager.getSocket(recipient);
-            if (recipientSocket != INVALID_SOCKET) {
+            SocketType recipientSocket = clientManager.getSocket(recipient);
+            if (recipientSocket != SOCKET_INVALID) {
                 NetworkUtils::forwardMessage(recipientSocket, header, payload);
             }
         } else {
             auto subscribers = topicManager.getSubscribers(topic);
             for (const std::string& subscriber : subscribers) {
                 if (subscriber != sender) {
-                    SOCKET subscriberSocket = clientManager.getSocket(subscriber);
-                    if (subscriberSocket != INVALID_SOCKET) {
+                    SocketType subscriberSocket = clientManager.getSocket(subscriber);
+                    if (subscriberSocket != SOCKET_INVALID) {
                         NetworkUtils::forwardMessage(subscriberSocket, header, payload);
                     }
                 }
@@ -169,7 +169,7 @@ public:
     }
 
     // Handle file data chunk
-    void handleFileData(SOCKET clientSocket, PacketHeader* header, std::vector<char>& payload) {
+    void handleFileData(SocketType clientSocket, PacketHeader* header, std::vector<char>& payload) {
         uint32_t msgId = header->messageId;
         
         if (!fileTransferManager.exists(msgId)) {
@@ -188,16 +188,16 @@ public:
         
         if (StringUtils::isDMTopic(topic)) {
             std::string recipient = StringUtils::extractRecipient(topic, sender);
-            SOCKET recipientSocket = clientManager.getSocket(recipient);
-            if (recipientSocket != INVALID_SOCKET) {
+            SocketType recipientSocket = clientManager.getSocket(recipient);
+            if (recipientSocket != SOCKET_INVALID) {
                 NetworkUtils::forwardMessage(recipientSocket, header, payload);
             }
         } else {
             auto subscribers = topicManager.getSubscribers(topic);
             for (const std::string& subscriber : subscribers) {
                 if (subscriber != sender) {
-                    SOCKET subscriberSocket = clientManager.getSocket(subscriber);
-                    if (subscriberSocket != INVALID_SOCKET) {
+                    SocketType subscriberSocket = clientManager.getSocket(subscriber);
+                    if (subscriberSocket != SOCKET_INVALID) {
                         NetworkUtils::forwardMessage(subscriberSocket, header, payload);
                     }
                 }
@@ -214,7 +214,7 @@ public:
     }
 
     // Handle client disconnect
-    void handleDisconnect(SOCKET clientSocket) {
+    void handleDisconnect(SocketType clientSocket) {
         std::string username = clientManager.removeClient(clientSocket);
         
         if (!username.empty()) {
@@ -231,16 +231,16 @@ public:
             broadcastUserStatus(username, false);
         }
         
-        closesocket(clientSocket);
+        CLOSE_SOCKET(clientSocket);
     }
     
     // Handle request for online users list
-    void handleRequestUserList(SOCKET clientSocket) {
+    void handleRequestUserList(SocketType clientSocket) {
         sendUserList(clientSocket);
     }
     
     // Handle request for chat history
-    void handleRequestHistory(SOCKET clientSocket, PacketHeader* header, std::vector<char>& payload) {
+    void handleRequestHistory(SocketType clientSocket, PacketHeader* header, std::vector<char>& payload) {
         if (!dbManager) return;
         
         std::string topic(header->topic);
@@ -278,15 +278,15 @@ public:
     }
     
     // Handle game message - just forward to recipient
-    void handleGameMessage(SOCKET clientSocket, PacketHeader* header, std::vector<char>& payload) {
+    void handleGameMessage(SocketType clientSocket, PacketHeader* header, std::vector<char>& payload) {
         std::string sender(header->sender);
         std::string recipient(header->topic);  // topic contains recipient username
         
         std::cout << "[GAME] From '" << sender << "' to '" << recipient << "'" << std::endl;
         
         // Forward to recipient
-        SOCKET recipientSocket = clientManager.getSocket(recipient);
-        if (recipientSocket != INVALID_SOCKET) {
+        SocketType recipientSocket = clientManager.getSocket(recipient);
+        if (recipientSocket != SOCKET_INVALID) {
             NetworkUtils::forwardMessage(recipientSocket, header, payload);
         }
     }
@@ -314,7 +314,7 @@ private:
     }
     
     // Send list of online users to a specific client (excluding themselves)
-    void sendUserList(SOCKET clientSocket) {
+    void sendUserList(SocketType clientSocket) {
         std::string currentUser = clientManager.getUsername(clientSocket);
         auto clients = clientManager.getAllClients();
         
@@ -358,7 +358,7 @@ private:
     }
     
     // Send list of all groups with membership info to a specific client
-    void sendGroupList(SOCKET clientSocket, const std::string& username) {
+    void sendGroupList(SocketType clientSocket, const std::string& username) {
         if (!dbManager) return;
         
         auto groups = dbManager->getAllGroupsWithMembership(username);
@@ -382,7 +382,7 @@ private:
     }
     
     // Send list of all groups AND auto-subscribe user to their joined groups
-    void sendGroupListAndSubscribe(SOCKET clientSocket, const std::string& username) {
+    void sendGroupListAndSubscribe(SocketType clientSocket, const std::string& username) {
         if (!dbManager) return;
         
         auto groups = dbManager->getAllGroupsWithMembership(username);

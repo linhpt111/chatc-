@@ -14,9 +14,24 @@
 #include <mutex>
 #include <fstream>
 #include <functional>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
+
+// Cross-platform includes
+#ifdef _WIN32
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #include <windows.h>
+    #include <direct.h>
+    #define MKDIR(dir) _mkdir(dir)
+    #define SLEEP_MS(ms) Sleep(ms)
+#else
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+    #include <sys/stat.h>
+    #define MKDIR(dir) mkdir(dir, 0755)
+    #define SLEEP_MS(ms) usleep((ms) * 1000)
+#endif
 
 class ChatClient {
 public:
@@ -30,7 +45,7 @@ public:
     using GameCallback = std::function<void(const std::string&, const std::string&)>;  // from, payload
 
 private:
-    SOCKET clientSocket;
+    SocketType clientSocket;
     std::string username;
     std::string currentTopic;
     bool connected;
@@ -57,7 +72,7 @@ private:
     std::map<uint32_t, FileReceiver> activeDownloads;
 
 public:
-    ChatClient() : clientSocket(INVALID_SOCKET), connected(false) {}
+    ChatClient() : clientSocket(SOCKET_INVALID), connected(false) {}
     
     ~ChatClient() {
         disconnect();
@@ -106,7 +121,7 @@ public:
         }
         
         clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        if (clientSocket == INVALID_SOCKET) {
+        if (clientSocket == SOCKET_INVALID) {
             std::cerr << "Socket creation failed" << std::endl;
             NetworkUtils::cleanupWinsock();
             return false;
@@ -119,7 +134,7 @@ public:
         
         if (::connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
             std::cerr << "Connection failed" << std::endl;
-            closesocket(clientSocket);
+            CLOSE_SOCKET(clientSocket);
             NetworkUtils::cleanupWinsock();
             return false;
         }
@@ -144,9 +159,9 @@ public:
             connected = false;
         }
         
-        if (clientSocket != INVALID_SOCKET) {
-            closesocket(clientSocket);
-            clientSocket = INVALID_SOCKET;
+        if (clientSocket != SOCKET_INVALID) {
+            CLOSE_SOCKET(clientSocket);
+            clientSocket = SOCKET_INVALID;
         }
         
         NetworkUtils::cleanupWinsock();
@@ -318,7 +333,7 @@ private:
             totalSent += chunkSize;
             
             // Small delay to prevent network flooding
-            Sleep(1);
+            SLEEP_MS(1);
         }
         
         file.close();
@@ -440,14 +455,18 @@ private:
         std::cout << "[FILE] Receiving '" << filename << "' (" << fileSize 
                   << " bytes) from " << sender << std::endl;
         
-        CreateDirectoryA("downloads", nullptr);
+        MKDIR("downloads");
         
         FileReceiver fr;
         fr.filename = filename;
         fr.fileSize = fileSize;
         fr.receivedSize = 0;
         fr.sender = sender;
+#ifdef _WIN32
         fr.file.open("downloads\\" + filename, std::ios::binary);
+#else
+        fr.file.open("downloads/" + filename, std::ios::binary);
+#endif
         
         activeDownloads[header->messageId] = std::move(fr);
     }

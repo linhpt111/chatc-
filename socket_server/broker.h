@@ -14,7 +14,7 @@
 
 class Broker {
 private:
-    SOCKET serverSocket;
+    SocketType serverSocket;
     ClientManager clientManager;
     TopicManager topicManager;
     FileTransferManager fileTransferManager;
@@ -24,7 +24,7 @@ private:
     bool running;
 
 public:
-    Broker() : serverSocket(INVALID_SOCKET), dbManager(nullptr), messageHandler(nullptr), running(false) {}
+    Broker() : serverSocket(SOCKET_INVALID), dbManager(nullptr), messageHandler(nullptr), running(false) {}
     
     ~Broker() {
         stop();
@@ -39,7 +39,7 @@ public:
         }
         
         serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        if (serverSocket == INVALID_SOCKET) {
+        if (serverSocket == SOCKET_INVALID) {
             std::cerr << "Socket creation failed" << std::endl;
             NetworkUtils::cleanupWinsock();
             return false;
@@ -52,14 +52,14 @@ public:
         
         if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
             std::cerr << "Bind failed" << std::endl;
-            closesocket(serverSocket);
+            CLOSE_SOCKET(serverSocket);
             NetworkUtils::cleanupWinsock();
             return false;
         }
         
         if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR) {
             std::cerr << "Listen failed" << std::endl;
-            closesocket(serverSocket);
+            CLOSE_SOCKET(serverSocket);
             NetworkUtils::cleanupWinsock();
             return false;
         }
@@ -78,8 +78,8 @@ public:
     
     void run() {
         while (running) {
-            SOCKET clientSocket = accept(serverSocket, nullptr, nullptr);
-            if (clientSocket == INVALID_SOCKET) {
+            SocketType clientSocket = accept(serverSocket, nullptr, nullptr);
+            if (clientSocket == SOCKET_INVALID) {
                 if (running) {
                     std::cerr << "Accept failed" << std::endl;
                 }
@@ -93,9 +93,9 @@ public:
     
     void stop() {
         running = false;
-        if (serverSocket != INVALID_SOCKET) {
-            closesocket(serverSocket);
-            serverSocket = INVALID_SOCKET;
+        if (serverSocket != SOCKET_INVALID) {
+            CLOSE_SOCKET(serverSocket);
+            serverSocket = SOCKET_INVALID;
         }
         NetworkUtils::cleanupWinsock();
     }
@@ -106,7 +106,7 @@ public:
     size_t getActiveTransfers() const { return fileTransferManager.getActiveCount(); }
 
 private:
-    void handleClient(SOCKET clientSocket) {
+    void handleClient(SocketType clientSocket) {
         char buffer[MAX_BUFFER_SIZE];
         
         while (running) {
@@ -132,7 +132,7 @@ private:
         }
     }
     
-    void processMessage(SOCKET clientSocket, PacketHeader* header, std::vector<char>& payload) {
+    void processMessage(SocketType clientSocket, PacketHeader* header, std::vector<char>& payload) {
         std::lock_guard<std::mutex> lock(mtx);
         
         switch (header->msgType) {

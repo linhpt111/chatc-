@@ -5,7 +5,16 @@
 #include <map>
 #include <vector>
 #include <utility>
-#include <shellapi.h>
+
+// Cross-platform includes
+#ifdef _WIN32
+    #include <shellapi.h>
+    #include <windows.h>
+#else
+    #include <cstdlib>
+    #include <climits>
+    #include <unistd.h>
+#endif
 
 // Global client instance
 ChatClient* g_client = nullptr;
@@ -146,6 +155,7 @@ struct FileData {
     uint32_t size;
 };
 
+#ifdef _WIN32
 // Convert UTF-8 to wide string for Windows Unicode APIs
 std::wstring utf8_to_wide(const std::string& utf8str) {
     if (utf8str.empty()) return L"";
@@ -154,20 +164,6 @@ std::wstring utf8_to_wide(const std::string& utf8str) {
     std::wstring result(size - 1, L'\0');
     MultiByteToWideChar(CP_UTF8, 0, utf8str.c_str(), -1, &result[0], size);
     return result;
-}
-
-// Callback when clicking Open button embedded in chat
-void on_embedded_open_clicked(GtkButton* button, gpointer user_data) {
-    (void)user_data; // unused
-    const char* filepath = (const char*)g_object_get_data(G_OBJECT(button), "filepath");
-    if (filepath && filepath[0] != '\0') {
-        // Convert UTF-8 path to wide string for proper Unicode handling
-        std::wstring widePath = utf8_to_wide(filepath);
-        int result = (int)(intptr_t)ShellExecuteW(nullptr, L"open", widePath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-        if (result <= 32) {
-            g_print("Failed to open file: %s (error: %d)\n", filepath, result);
-        }
-    }
 }
 
 // Convert wide string to UTF-8
@@ -179,16 +175,52 @@ std::string wide_to_utf8(const std::wstring& widestr) {
     WideCharToMultiByte(CP_UTF8, 0, widestr.c_str(), -1, &result[0], size, nullptr, nullptr);
     return result;
 }
+#endif
+
+// Cross-platform function to open file with default application
+void open_file_with_app(const char* filepath) {
+    if (!filepath || filepath[0] == '\0') return;
+#ifdef _WIN32
+    std::wstring widePath = utf8_to_wide(filepath);
+    ShellExecuteW(nullptr, L"open", widePath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#else
+    // Use xdg-open on Linux
+    std::string cmd = "xdg-open \"" + std::string(filepath) + "\" &";
+    system(cmd.c_str());
+#endif
+}
+
+// Cross-platform function to get absolute path
+std::string get_absolute_path(const std::string& path) {
+#ifdef _WIN32
+    std::wstring widePath = utf8_to_wide(path);
+    wchar_t absPath[MAX_PATH];
+    DWORD len = GetFullPathNameW(widePath.c_str(), MAX_PATH, absPath, nullptr);
+    return (len > 0) ? wide_to_utf8(absPath) : path;
+#else
+    char absPath[PATH_MAX];
+    if (realpath(path.c_str(), absPath)) {
+        return std::string(absPath);
+    }
+    return path;
+#endif
+}
+
+// Callback when clicking Open button embedded in chat
+void on_embedded_open_clicked(GtkButton* button, gpointer user_data) {
+    (void)user_data; // unused
+    const char* filepath = (const char*)g_object_get_data(G_OBJECT(button), "filepath");
+    if (filepath && filepath[0] != '\0') {
+        open_file_with_app(filepath);
+    }
+}
 
 // Thread-safe file received display
 gboolean display_file_ui(gpointer data) {
     FileData* fileData = static_cast<FileData*>(data);
     
-    // Get absolute path for the file using Unicode APIs
-    std::wstring widePath = utf8_to_wide(fileData->filepath);
-    wchar_t absPath[MAX_PATH];
-    DWORD len = GetFullPathNameW(widePath.c_str(), MAX_PATH, absPath, nullptr);
-    std::string absolutePath = (len > 0) ? wide_to_utf8(absPath) : fileData->filepath;
+    // Get absolute path for the file
+    std::string absolutePath = get_absolute_path(fileData->filepath);
     
     g_downloadedFiles.push_back(absolutePath);
     g_lastReceivedFile = absolutePath;
@@ -253,7 +285,7 @@ gboolean display_history_ui(gpointer data) {
 // Open file when clicking on file link
 void open_file(const char* filepath) {
     if (filepath) {
-        ShellExecuteA(nullptr, "open", filepath, nullptr, nullptr, SW_SHOWNORMAL);
+        open_file_with_app(filepath);
     }
 }
 
