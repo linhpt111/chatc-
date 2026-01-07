@@ -10,6 +10,15 @@
 #include <map>
 #include <algorithm>
 
+// Cross-platform directory creation
+#ifdef _WIN32
+    #include <windows.h>
+    #include <direct.h>
+#else
+    #include <sys/stat.h>
+    #include <sys/types.h>
+#endif
+
 // Simple file-based database (no external dependencies)
 // Format: CSV files for each table
 

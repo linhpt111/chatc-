@@ -1,0 +1,25 @@
+# Build artifacts
+bin/
+*.exe
+*.o
+*.obj
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Release
+release/
